@@ -273,7 +273,7 @@
             <button class="control active" onclick="toggleControl(this)">▣</button>
             <button class="control" onclick="alert('اشتراک صفحه در نسخه اتصال واقعی فعال می‌شود.')">▥</button>
             <button class="control" onclick="scrollToBoard()">✎</button>
-            <button class="control end" onclick="alert('جلسه آزمایشی پایان یافت.')">☎</button>
+            <button class="control end" onclick="cleanupMeeting()">☎</button>
           </div>
         </div>
         <div class="room-side">
@@ -336,42 +336,27 @@
   }
 
 let localAudioStream = null;
+let localAudioStream = null;
 let peerConnection = null;
-async function resetMeeting() {
-  console.log("🔄 ریست جلسه...");
+let signalChannel = null;
 
-  if (peerConnection) {
-    peerConnection.ontrack = null;
-    peerConnection.onicecandidate = null;
-    peerConnection.close();
-    peerConnection = null;
-  }
-
-  if (localAudioStream) {
-    localAudioStream.getTracks().forEach(track => track.stop());
-    localAudioStream = null;
-  }
-
-  meetingStarted = false;
-  pendingCandidates = [];
-
-  console.log("✅ جلسه قبلی کاملاً بسته شد");
-}
 const myId = crypto.randomUUID();
 const roomId = "otagh-saghf-demo";
-const pendingCandidates = [];
+
+let pendingCandidates = [];
+let meetingStarted = false;
 
 async function startRealMeeting() {
-
   try {
+    // اگر اتصال قبلی وجود دارد، اول کامل ببندش
+    await cleanupMeeting();
 
-    if (!localAudioStream) {
-      localAudioStream =
-        await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: false
-        });
-    }
+    console.log("🎙️ شروع جلسه...");
+
+    localAudioStream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: false
+    });
 
     peerConnection = new RTCPeerConnection({
       iceServers: [
@@ -383,7 +368,9 @@ async function startRealMeeting() {
       peerConnection.addTrack(track, localAudioStream);
     });
 
+    // دریافت صدای نفر مقابل
     peerConnection.ontrack = event => {
+      console.log("🔊 صدای نفر مقابل دریافت شد");
 
       let audio = document.getElementById("remoteAudio");
 
@@ -392,184 +379,399 @@ async function startRealMeeting() {
         audio.id = "remoteAudio";
         audio.autoplay = true;
         audio.playsInline = true;
+        audio.controls = false;
+
         document.body.appendChild(audio);
       }
 
       audio.srcObject = event.streams[0];
+
+      audio.play().catch(error => {
+        console.log("پخش صدا نیاز به کلیک دارد:", error);
+      });
     };
 
+    // ICE
     peerConnection.onicecandidate = async event => {
-
       if (!event.candidate) return;
 
-      await supabaseClient
-        .from("meeting_signals")
-        .insert({
-          room_id: roomId,
-          sender_id: myId,
-          signal_type: "ice",
-          signal_data: event.candidate.toJSON()
-        });
+      await sendSignal(
+        "ice",
+        event.candidate.toJSON()
+      );
     };
 
-    supabaseClient
-      .channel("room-" + roomId)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "meeting_signals",
-          filter: "room_id=eq." + roomId
-        },
-        async payload => {
+    // وضعیت اتصال
+    peerConnection.onconnectionstatechange = () => {
+      console.log(
+        "WebRTC:",
+        peerConnection.connectionState
+      );
 
-          const signal = payload.new;
+      if (peerConnection.connectionState === "connected") {
+        console.log("✅ اتصال صوتی برقرار شد");
+      }
 
-          if (signal.sender_id === myId) return;
+      if (
+        peerConnection.connectionState === "failed" ||
+        peerConnection.connectionState === "disconnected"
+      ) {
+        console.log("⚠️ اتصال قطع شد");
+      }
+    };
 
-          await handleSignal(signal);
+    // کانال جدید برای هر بار اتصال
+    signalChannel = supabaseClient.channel(
+      "meeting-" + roomId + "-" + myId
+    );
+
+    signalChannel.on(
+      "broadcast",
+      { event: "signal" },
+      async ({ payload }) => {
+
+        if (!payload) return;
+
+        if (payload.sender_id === myId) {
+          return;
         }
-      )
-      .subscribe();
 
-    await supabaseClient
-      .from("meeting_signals")
-      .insert({
-        room_id: roomId,
-        sender_id: myId,
-        signal_type: "join",
-        signal_data: {}
-      });
+        console.log(
+          "📨 پیام:",
+          payload.type
+        );
 
-    console.log("وارد اتاق شدی");
+        await handleSignal(payload);
+      }
+    );
+
+    signalChannel.subscribe(async status => {
+
+      console.log(
+        "Supabase:",
+        status
+      );
+
+      if (status === "SUBSCRIBED") {
+
+        meetingStarted = true;
+
+        console.log(
+          "✅ کانال Realtime آماده است"
+        );
+
+        await sendSignal(
+          "join",
+          {}
+        );
+      }
+    });
 
   } catch (error) {
 
-    console.error(error);
+    console.error(
+      "❌ خطای جلسه:",
+      error
+    );
 
-    alert("اتصال به میکروفون انجام نشد.");
+    alert(
+      "اتصال به جلسه انجام نشد."
+    );
   }
 }
 
 
+// ارسال پیام
+async function sendSignal(type, data) {
+
+  if (!signalChannel) {
+    console.log(
+      "❌ کانال آماده نیست"
+    );
+    return;
+  }
+
+  try {
+
+    await signalChannel.send({
+      type: "broadcast",
+      event: "signal",
+      payload: {
+        sender_id: myId,
+        type: type,
+        data: data
+      }
+    });
+
+  } catch (error) {
+
+    console.error(
+      "خطای ارسال:",
+      error
+    );
+  }
+}
+
+
+// دریافت پیام
 async function handleSignal(signal) {
 
   if (!peerConnection) return;
 
-  if (signal.signal_type === "join") {
+  // ورود نفر جدید
+  if (signal.type === "join") {
 
     if (myId < signal.sender_id) {
+
+      console.log(
+        "📤 ساخت Offer"
+      );
 
       const offer =
         await peerConnection.createOffer();
 
-      await peerConnection.setLocalDescription(offer);
+      await peerConnection.setLocalDescription(
+        offer
+      );
 
-      await supabaseClient
-        .from("meeting_signals")
-        .insert({
-          room_id: roomId,
-          sender_id: myId,
-          signal_type: "offer",
-          signal_data: offer
-        });
+      await sendSignal(
+        "offer",
+        offer
+      );
     }
 
     return;
   }
 
 
-  if (signal.signal_type === "offer") {
+  // دریافت Offer
+  if (signal.type === "offer") {
+
+    console.log(
+      "📥 Offer دریافت شد"
+    );
 
     await peerConnection.setRemoteDescription(
-      signal.signal_data
+      new RTCSessionDescription(
+        signal.data
+      )
     );
 
     const answer =
       await peerConnection.createAnswer();
 
-    await peerConnection.setLocalDescription(answer);
-
-    await supabaseClient
-      .from("meeting_signals")
-      .insert({
-        room_id: roomId,
-        sender_id: myId,
-        signal_type: "answer",
-        signal_data: answer
-      });
-
-    for (const candidate of pendingCandidates) {
-      await peerConnection.addIceCandidate(candidate);
-    }
-
-    pendingCandidates.length = 0;
-
-    return;
-  }
-
-
-  if (signal.signal_type === "answer") {
-
-    await peerConnection.setRemoteDescription(
-      signal.signal_data
+    await peerConnection.setLocalDescription(
+      answer
     );
 
-    for (const candidate of pendingCandidates) {
-      await peerConnection.addIceCandidate(candidate);
+    await sendSignal(
+      "answer",
+      answer
+    );
+
+    for (
+      const candidate of pendingCandidates
+    ) {
+
+      try {
+        await peerConnection.addIceCandidate(
+          candidate
+        );
+      } catch (e) {
+        console.log(
+          "ICE:",
+          e
+        );
+      }
     }
 
-    pendingCandidates.length = 0;
+    pendingCandidates = [];
 
     return;
   }
 
 
-  if (signal.signal_type === "ice") {
+  // دریافت Answer
+  if (signal.type === "answer") {
+
+    console.log(
+      "📥 Answer دریافت شد"
+    );
+
+    await peerConnection.setRemoteDescription(
+      new RTCSessionDescription(
+        signal.data
+      )
+    );
+
+    for (
+      const candidate of pendingCandidates
+    ) {
+
+      try {
+        await peerConnection.addIceCandidate(
+          candidate
+        );
+      } catch (e) {
+        console.log(
+          "ICE:",
+          e
+        );
+      }
+    }
+
+    pendingCandidates = [];
+
+    return;
+  }
+
+
+  // دریافت ICE
+  if (signal.type === "ice") {
 
     const candidate =
-      new RTCIceCandidate(signal.signal_data);
+      new RTCIceCandidate(
+        signal.data
+      );
 
-    if (peerConnection.remoteDescription) {
+    if (
+      peerConnection.remoteDescription
+    ) {
 
-      await peerConnection.addIceCandidate(candidate);
+      try {
+
+        await peerConnection.addIceCandidate(
+          candidate
+        );
+
+      } catch (error) {
+
+        console.log(
+          "ICE Error:",
+          error
+        );
+      }
 
     } else {
 
-      pendingCandidates.push(candidate);
+      pendingCandidates.push(
+        candidate
+      );
     }
   }
 }
 
 
+// بستن کامل جلسه
+async function cleanupMeeting() {
+
+  console.log(
+    "🧹 پاک کردن اتصال قبلی..."
+  );
+
+  meetingStarted = false;
+
+  pendingCandidates = [];
+
+  if (signalChannel) {
+
+    try {
+      await supabaseClient.removeChannel(
+        signalChannel
+      );
+    } catch (error) {
+      console.log(error);
+    }
+
+    signalChannel = null;
+  }
+
+  if (peerConnection) {
+
+    peerConnection.ontrack = null;
+    peerConnection.onicecandidate = null;
+
+    peerConnection.close();
+
+    peerConnection = null;
+  }
+
+  if (localAudioStream) {
+
+    localAudioStream
+      .getTracks()
+      .forEach(track => {
+        track.stop();
+      });
+
+    localAudioStream = null;
+  }
+
+  const audio =
+    document.getElementById(
+      "remoteAudio"
+    );
+
+  if (audio) {
+
+    audio.pause();
+    audio.srcObject = null;
+    audio.remove();
+  }
+
+  console.log(
+    "✅ اتصال قبلی کاملاً پاک شد"
+  );
+}
+
+
+// کنترل میکروفون
 async function toggleControl(btn) {
 
-  if (btn.textContent.includes("🎙")) {
+  // میکروفون
+  if (
+    btn.textContent.includes("🎙")
+  ) {
 
+    // شروع جلسه
     if (!localAudioStream) {
 
       await startRealMeeting();
 
-      btn.classList.add("active");
+      btn.classList.add(
+        "active"
+      );
 
       return;
     }
 
     const track =
-      localAudioStream.getAudioTracks()[0];
+      localAudioStream
+        .getAudioTracks()[0];
 
-    track.enabled = !track.enabled;
+    if (!track) return;
+
+    track.enabled =
+      !track.enabled;
 
     btn.classList.toggle(
       "active",
       track.enabled
     );
 
+    console.log(
+      track.enabled
+        ? "🎙️ میکروفون روشن"
+        : "🔇 میکروفون خاموش"
+    );
+
     return;
   }
 
-  btn.classList.toggle("active");
+  // سایر دکمه‌ها
+  btn.classList.toggle(
+    "active"
+  );
 }
   function showFile(input){
     const file = input.files[0];

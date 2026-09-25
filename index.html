@@ -337,7 +337,26 @@
 
 let localAudioStream = null;
 let peerConnection = null;
+async function resetMeeting() {
+  console.log("🔄 ریست جلسه...");
 
+  if (peerConnection) {
+    peerConnection.ontrack = null;
+    peerConnection.onicecandidate = null;
+    peerConnection.close();
+    peerConnection = null;
+  }
+
+  if (localAudioStream) {
+    localAudioStream.getTracks().forEach(track => track.stop());
+    localAudioStream = null;
+  }
+
+  meetingStarted = false;
+  pendingCandidates = [];
+
+  console.log("✅ جلسه قبلی کاملاً بسته شد");
+}
 const myId = crypto.randomUUID();
 const roomId = "otagh-saghf-demo";
 const pendingCandidates = [];

@@ -335,9 +335,53 @@
     document.getElementById('whiteboardSection').scrollIntoView({behavior:'smooth',block:'start'});
   }
 
-  function toggleControl(btn){
-    btn.classList.toggle('active');
+ let localAudioStream = null;
+let microphoneEnabled = false;
+
+async function toggleControl(btn){
+  // دکمه میکروفون
+  if(btn.textContent.includes('🎙')){
+    try{
+      if(!localAudioStream){
+        localAudioStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: false
+        });
+
+        microphoneEnabled = true;
+        btn.classList.add('active');
+
+        console.log('🎙 میکروفون فعال شد');
+        alert('میکروفون با موفقیت فعال شد 🎙');
+      }else{
+        const audioTrack = localAudioStream.getAudioTracks()[0];
+
+        audioTrack.enabled = !audioTrack.enabled;
+        microphoneEnabled = audioTrack.enabled;
+
+        btn.classList.toggle('active', microphoneEnabled);
+
+        console.log(
+          microphoneEnabled
+            ? '🎙 میکروفون روشن'
+            : '🔇 میکروفون خاموش'
+        );
+      }
+    }catch(error){
+      console.error('Microphone error:', error);
+
+      alert(
+        'دسترسی به میکروفون برقرار نشد.\n\n' +
+        'لطفاً اجازه Microphone را برای سایت فعال کن.'
+      );
+    }
+
+    return;
   }
+
+  // سایر دکمه‌ها فعلاً مثل قبل
+  btn.classList.toggle('active');
+}
 
   function showFile(input){
     const file = input.files[0];

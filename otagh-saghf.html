@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>اتاق سقف | فضای جلسات پروژه سقف</title>
+  <style>
+    :root{
+      --bg:#f6f7fb;
+      --surface:#ffffff;
+      --surface-2:#f9fafc;
+      --text:#17151d;
+      --muted:#7d7b86;
+      --border:#e8e7ee;
+      --purple:#7047d8;
+      --purple-dark:#5630b7;
+      --purple-soft:#f0ebff;
+      --green:#25a36f;
+      --red:#e65353;
+      --shadow:0 12px 40px rgba(34,25,65,.07);
+      --radius:20px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{margin:0;min-height:100%;font-family:Tahoma,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}
+    button,input{font:inherit}
+    button{cursor:pointer;border:0}
+    .app{min-height:100vh;display:flex}
+
+    /* SIDEBAR */
+    .sidebar{
+      width:250px;background:var(--surface);border-left:1px solid var(--border);
+      padding:24px 16px;display:flex;flex-direction:column;gap:25px;position:fixed;
+      right:0;top:0;bottom:0;z-index:20
+    }
+    .brand{display:flex;align-items:center;gap:12px;padding:4px 8px 16px}
+    .brand-mark{
+      width:44px;height:44px;border-radius:14px;background:linear-gradient(145deg,#7c55df,#5730b9);
+      display:grid;place-items:center;color:white;font-size:22px;font-weight:800;
+      box-shadow:0 8px 18px rgba(112,71,216,.22)
+    }
+    .brand h1{font-size:18px;margin:0}
+    .brand span{font-size:11px;color:var(--muted);display:block;margin-top:4px}
+
+    .nav{display:flex;flex-direction:column;gap:7px}
+    .nav button{
+      background:transparent;color:#696772;text-align:right;padding:13px 14px;border-radius:13px;
+      display:flex;align-items:center;gap:12px;transition:.2s
+    }
+    .nav button:hover,.nav button.active{background:var(--purple-soft);color:var(--purple);font-weight:700}
+    .nav-icon{width:20px;text-align:center;font-size:17px}
+    .sidebar-bottom{margin-top:auto;background:var(--surface-2);border:1px solid var(--border);border-radius:16px;padding:14px}
+    .profile{display:flex;align-items:center;gap:10px}
+    .avatar{width:38px;height:38px;border-radius:50%;background:#ded5fa;color:#5730b9;display:grid;place-items:center;font-weight:bold}
+    .profile strong{font-size:13px}.profile small{color:var(--muted);display:block;margin-top:3px}
+
+    /* MAIN */
+    main{margin-right:250px;width:calc(100% - 250px);padding:25px 30px 90px}
+    .topbar{height:60px;display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+    .topbar h2{margin:0;font-size:24px}.topbar p{margin:7px 0 0;color:var(--muted);font-size:13px}
+    .top-actions{display:flex;gap:10px}
+    .icon-btn,.secondary-btn{
+      background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:11px 14px;color:#55525e
+    }
+    .primary-btn{
+      background:var(--purple);color:white;border-radius:13px;padding:12px 17px;
+      box-shadow:0 7px 18px rgba(112,71,216,.2)
+    }
+    .primary-btn:hover{background:var(--purple-dark)}
+
+    .hero{
+      background:linear-gradient(110deg,#221743 0%,#49317e 55%,#7250c8 100%);
+      color:white;border-radius:24px;padding:28px 30px;display:flex;align-items:center;
+      justify-content:space-between;overflow:hidden;position:relative;box-shadow:var(--shadow)
+    }
+    .hero:after{content:"";position:absolute;width:330px;height:330px;border:1px solid rgba(255,255,255,.12);border-radius:50%;left:-100px;top:-190px}
+    .hero-content{position:relative;z-index:1}
+    .eyebrow{font-size:12px;color:#d9cff7;margin-bottom:10px}
+    .hero h3{font-size:26px;margin:0 0 10px}.hero p{margin:0;color:#ded7ed;font-size:13px}
+    .hero-actions{display:flex;gap:9px;margin-top:19px}
+    .hero .primary-btn{background:white;color:#5730b9}.hero .secondary-btn{background:rgba(255,255,255,.1);color:white;border-color:rgba(255,255,255,.2)}
+    .hero-symbol{font-size:90px;opacity:.12;transform:rotate(-12deg);margin-left:45px}
+
+    .grid{display:grid;grid-template-columns:1.7fr 1fr;gap:18px;margin-top:20px}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+    .card-head{padding:19px 20px 14px;display:flex;align-items:center;justify-content:space-between}
+    .card-head h4{margin:0;font-size:15px}.card-head span{font-size:12px;color:var(--muted)}
+
+    /* MEETINGS */
+    .meeting-list{padding:0 15px 15px;display:flex;flex-direction:column;gap:9px}
+    .meeting{
+      display:flex;align-items:center;justify-content:space-between;padding:14px;border:1px solid var(--border);
+      border-radius:15px;background:#fff
+    }
+    .meeting-info{display:flex;align-items:center;gap:12px}
+    .meeting-dot{width:10px;height:10px;background:var(--green);border-radius:50%;box-shadow:0 0 0 5px #e6f7f0}
+    .meeting strong{font-size:13px}.meeting small{display:block;color:var(--muted);margin-top:5px}
+    .meeting .join{background:var(--purple-soft);color:var(--purple);padding:9px 12px;border-radius:10px;font-size:12px;font-weight:bold}
+
+    /* QUICK TOOLS */
+    .tools{padding:0 15px 15px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .tool{border:1px solid var(--border);border-radius:15px;background:var(--surface-2);padding:16px;text-align:right}
+    .tool-icon{font-size:23px;margin-bottom:9px}.tool strong{font-size:13px;display:block}.tool small{font-size:11px;color:var(--muted);display:block;margin-top:5px}
+
+    .room-preview{margin-top:20px}
+    .room{padding:16px;display:grid;grid-template-columns:1.55fr .65fr;gap:14px}
+    .stage{background:#16151a;border-radius:17px;min-height:340px;position:relative;overflow:hidden;padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:9px}
+    .video-tile{background:linear-gradient(145deg,#30303a,#1d1c22);border-radius:13px;position:relative;display:grid;place-items:center;color:#888;font-size:30px;min-height:145px}
+    .video-tile.main{grid-column:span 2;min-height:210px}
+    .video-label{position:absolute;bottom:9px;right:9px;background:rgba(0,0,0,.55);color:#fff;padding:5px 8px;border-radius:7px;font-size:10px}
+    .live{position:absolute;top:12px;right:12px;background:#d94d57;color:white;padding:6px 9px;border-radius:8px;font-size:10px}
+    .room-side{border:1px solid var(--border);border-radius:16px;padding:15px;background:var(--surface-2)}
+    .side-title{font-size:13px;font-weight:bold;margin-bottom:13px}
+    .member{display:flex;align-items:center;gap:9px;padding:8px 0}
+    .member .avatar{width:32px;height:32px;font-size:11px}
+    .status{width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:auto}
+
+    .bottom-tools{display:flex;gap:8px;justify-content:center;padding-top:12px}
+    .control{width:42px;height:42px;border-radius:12px;background:#f0eff3;color:#4f4d56}
+    .control.active{background:var(--purple);color:white}.control.end{background:#feeaea;color:var(--red)}
+
+    /* WHITEBOARD */
+    .workspace{display:grid;grid-template-columns:1.3fr .7fr;gap:18px;margin-top:20px}
+    .whiteboard-wrap{padding:15px}
+    .whiteboard{
+      min-height:390px;border:1px solid var(--border);border-radius:15px;background:white;
+      position:relative;overflow:hidden;
+      background-image:linear-gradient(#f0f0f3 1px,transparent 1px),linear-gradient(90deg,#f0f0f3 1px,transparent 1px);
+      background-size:25px 25px
+    }
+    #board{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
+    .board-title{position:absolute;top:14px;right:15px;background:rgba(255,255,255,.9);padding:7px 10px;border-radius:8px;font-size:11px;color:#777;z-index:2}
+    .board-tools{display:flex;gap:7px;padding-top:10px}
+    .board-tools button{background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:8px 11px;font-size:11px;color:#555}
+    .pdf-box{padding:0 15px 15px}
+    .drop{
+      border:1.5px dashed #d3c9ef;border-radius:15px;padding:32px 15px;text-align:center;background:#fbfaff;
+      color:#777
+    }
+    .drop .big{font-size:32px;margin-bottom:8px}.drop strong{font-size:13px;display:block;color:#555}.drop small{font-size:11px;display:block;margin:7px 0 14px}
+    .file-name{font-size:11px;color:var(--purple);margin-top:10px;min-height:16px}
+    input[type=file]{display:none}
+
+    .mobile-nav{display:none}
+
+    @media(max-width:950px){
+      .sidebar{width:205px}.sidebar .brand span{display:none}main{margin-right:205px;width:calc(100% - 205px);padding:20px}
+      .grid,.workspace{grid-template-columns:1fr}.room{grid-template-columns:1fr}.room-side{min-height:auto}
+    }
+    @media(max-width:700px){
+      .sidebar{display:none}
+      main{margin:0;width:100%;padding:15px 13px 82px}
+      .topbar{height:auto;margin-bottom:15px}.topbar h2{font-size:19px}.topbar p{font-size:11px}
+      .hero{padding:22px 20px;border-radius:20px}.hero h3{font-size:21px}.hero-symbol{display:none}
+      .hero-actions .secondary-btn{display:none}
+      .grid{margin-top:15px}.card{border-radius:17px}
+      .room-preview{margin-top:15px}.stage{min-height:310px;grid-template-columns:1fr 1fr}.video-tile.main{min-height:180px}
+      .workspace{margin-top:15px}.whiteboard{min-height:310px}
+      .mobile-nav{
+        position:fixed;display:flex;bottom:0;left:0;right:0;height:66px;background:rgba(255,255,255,.96);
+        backdrop-filter:blur(12px);border-top:1px solid var(--border);z-index:50;justify-content:space-around;padding:7px 5px
+      }
+      .mobile-nav button{background:none;color:#85828d;font-size:10px;display:flex;flex-direction:column;align-items:center;gap:4px}
+      .mobile-nav button.active{color:var(--purple);font-weight:bold}
+      .mobile-nav i{font-style:normal;font-size:18px}
+    }
+  </style>
+</head>
+<body>
+
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">س</div>
+      <div>
+        <h1>اتاق سقف</h1>
+        <span>فضای جلسات پروژه سقف</span>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <button class="active"><span class="nav-icon">⌂</span>داشبورد</button>
+      <button><span class="nav-icon">▣</span>جلسات</button>
+      <button><span class="nav-icon">✎</span>وایت‌برد</button>
+      <button><span class="nav-icon">▤</span>فایل‌ها</button>
+      <button><span class="nav-icon">✓</span>کارها</button>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="profile">
+        <div class="avatar">ک</div>
+        <div><strong>عضو تیم سقف</strong><small>آنلاین</small></div>
+      </div>
+    </div>
+  </aside>
+
+  <main>
+    <header class="topbar">
+      <div>
+        <h2>سلام، به اتاق سقف خوش آمدی 👋</h2>
+        <p>فضای ساده و متمرکز برای جلسه، ایده و تصمیم‌گیری.</p>
+      </div>
+      <div class="top-actions">
+        <button class="icon-btn" title="اعلان‌ها">♧</button>
+        <button class="primary-btn" onclick="openMeeting()">+ ایجاد جلسه</button>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="hero-content">
+        <div class="eyebrow">پروژه سقف • اتاق جلسات</div>
+        <h3>همه چیز برای یک جلسه خوب، همین‌جاست.</h3>
+        <p>صحبت کنید، صفحه را با هم ببینید، روی وایت‌برد ایده بزنید و فایل‌ها را بررسی کنید.</p>
+        <div class="hero-actions">
+          <button class="primary-btn" onclick="openMeeting()">شروع یک جلسه</button>
+          <button class="secondary-btn" onclick="document.getElementById('pdfInput').click()">آپلود PDF</button>
+        </div>
+      </div>
+      <div class="hero-symbol">⌁</div>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <div class="card-head"><h4>جلسات پیش‌رو</h4><span>امروز</span></div>
+        <div class="meeting-list">
+          <div class="meeting">
+            <div class="meeting-info"><div class="meeting-dot"></div><div><strong>جلسه طراحی نسخه جدید</strong><small>امروز • ۱۲:۳۰ • ۴ نفر</small></div></div>
+            <button class="join" onclick="openMeeting()">ورود به جلسه</button>
+          </div>
+          <div class="meeting">
+            <div class="meeting-info"><div class="meeting-dot" style="background:#b9b7bf;box-shadow:0 0 0 5px #f0eff2"></div><div><strong>بررسی امکانات اتاق سقف</strong><small>امروز • ۱۸:۰۰ • ۳ نفر</small></div></div>
+            <button class="join" onclick="openMeeting()">جزئیات</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h4>ابزارهای جلسه</h4><span>سریع</span></div>
+        <div class="tools">
+          <div class="tool" onclick="scrollToBoard()" style="cursor:pointer"><div class="tool-icon">✎</div><strong>وایت‌برد</strong><small>ایده‌ها را بکشید</small></div>
+          <div class="tool" onclick="document.getElementById('pdfInput').click()" style="cursor:pointer"><div class="tool-icon">▤</div><strong>PDF</strong><small>فایل ارائه کنید</small></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card room-preview">
+      <div class="card-head">
+        <h4>پیش‌نمایش اتاق جلسه</h4>
+        <span>۴ نفر حاضر</span>
+      </div>
+      <div class="room">
+        <div>
+          <div class="stage">
+            <div class="live">● LIVE</div>
+            <div class="video-tile main">◉<span class="video-label">شما</span></div>
+            <div class="video-tile">◉<span class="video-label">کوروش</span></div>
+            <div class="video-tile">◉<span class="video-label">عضو تیم</span></div>
+          </div>
+          <div class="bottom-tools">
+            <button class="control active" onclick="toggleControl(this)">🎙</button>
+            <button class="control active" onclick="toggleControl(this)">▣</button>
+            <button class="control" onclick="alert('اشتراک صفحه در نسخه اتصال واقعی فعال می‌شود.')">▥</button>
+            <button class="control" onclick="scrollToBoard()">✎</button>
+            <button class="control end" onclick="alert('جلسه آزمایشی پایان یافت.')">☎</button>
+          </div>
+        </div>
+        <div class="room-side">
+          <div class="side-title">اعضای جلسه</div>
+          <div class="member"><div class="avatar">ک</div><span>کوروش</span><span class="status"></span></div>
+          <div class="member"><div class="avatar">م</div><span>عضو تیم</span><span class="status"></span></div>
+          <div class="member"><div class="avatar">س</div><span>مشاور</span><span class="status"></span></div>
+          <div class="member"><div class="avatar">ا</div><span>مهمان</span><span class="status" style="background:#bbb"></span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <div class="card" id="whiteboardSection">
+        <div class="card-head"><h4>وایت‌برد جلسه</h4><span>برای طراحی و ایده‌پردازی</span></div>
+        <div class="whiteboard-wrap">
+          <div class="whiteboard" id="boardWrap">
+            <div class="board-title">وایت‌برد اتاق سقف</div>
+            <canvas id="board"></canvas>
+          </div>
+          <div class="board-tools">
+            <button onclick="clearBoard()">پاک کردن</button>
+            <button onclick="setBoardMode('pen')">✎ قلم</button>
+            <button onclick="setBoardMode('erase')">⌫ پاک‌کن</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h4>فایل‌های جلسه</h4><span>PDF</span></div>
+        <div class="pdf-box">
+          <label class="drop" for="pdfInput">
+            <div class="big">▤</div>
+            <strong>PDF را اینجا اضافه کنید</strong>
+            <small>برای ارائه، بررسی نقشه یا مستندات پروژه</small>
+            <span class="primary-btn" style="display:inline-block">انتخاب فایل</span>
+            <div class="file-name" id="fileName"></div>
+          </label>
+          <input id="pdfInput" type="file" accept="application/pdf" onchange="showFile(this)">
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<nav class="mobile-nav">
+  <button class="active"><i>⌂</i>خانه</button>
+  <button><i>▣</i>جلسات</button>
+  <button onclick="scrollToBoard()"><i>✎</i>وایت‌برد</button>
+  <button><i>☰</i>بیشتر</button>
+</nav>
+
+<script>
+  function openMeeting(){
+    document.querySelector('.room-preview').scrollIntoView({behavior:'smooth',block:'start'});
+  }
+
+  function scrollToBoard(){
+    document.getElementById('whiteboardSection').scrollIntoView({behavior:'smooth',block:'start'});
+  }
+
+  function toggleControl(btn){
+    btn.classList.toggle('active');
+  }
+
+  function showFile(input){
+    const file = input.files[0];
+    const out = document.getElementById('fileName');
+    if(!file){out.textContent='';return}
+    if(file.type !== 'application/pdf'){
+      out.textContent='لطفاً فقط فایل PDF انتخاب کنید.';
+      return;
+    }
+    out.textContent='✓ ' + file.name;
+  }
+
+  // Whiteboard
+  const canvas = document.getElementById('board');
+  const wrap = document.getElementById('boardWrap');
+  const ctx = canvas.getContext('2d');
+  let drawing=false, mode='pen';
+
+  function resizeCanvas(){
+    const old = document.createElement('canvas');
+    old.width=canvas.width; old.height=canvas.height;
+    if(canvas.width && canvas.height) old.getContext('2d').drawImage(canvas,0,0);
+    canvas.width=wrap.clientWidth;
+    canvas.height=wrap.clientHeight;
+    if(old.width && old.height) ctx.drawImage(old,0,0,old.width,old.height,0,0,canvas.width,canvas.height);
+    ctx.lineCap='round';ctx.lineJoin='round';
+  }
+  window.addEventListener('resize',resizeCanvas);
+  setTimeout(resizeCanvas,50);
+
+  function pos(e){
+    const r=canvas.getBoundingClientRect();
+    return {x:e.clientX-r.left,y:e.clientY-r.top};
+  }
+  canvas.addEventListener('pointerdown',e=>{
+    drawing=true;canvas.setPointerCapture(e.pointerId);
+    const p=pos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);
+  });
+  canvas.addEventListener('pointermove',e=>{
+    if(!drawing)return;
+    const p=pos(e);
+    ctx.lineWidth=mode==='erase'?22:3;
+    ctx.strokeStyle=mode==='erase'?'rgba(255,255,255,1)':'#7047d8';
+    ctx.lineTo(p.x,p.y);ctx.stroke();
+  });
+  canvas.addEventListener('pointerup',()=>drawing=false);
+  canvas.addEventListener('pointercancel',()=>drawing=false);
+
+  function clearBoard(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+  }
+  function setBoardMode(m){
+    mode=m;
+  }
+</script>
+</body>
+</html>

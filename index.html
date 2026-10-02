@@ -39,9 +39,9 @@ const MAX=5;
 let roomId=null,hostId=null,channel=null,localStream=null,screenStream=null,joined=false;
 let peers=new Map(),members=new Map(),micOn=true,camOn=true,sharing=false;
 const iceServers=[
-  {urls:'stun:stun.l.google.com:19302'},
-  {urls:'stun:stun1.l.google.com:19302'},
-  {urls:'stun:stun2.l.google.com:19302'}
+ {urls:'stun:stun.l.google.com:19302'},
+ {urls:'stun:stun1.l.google.com:19302'},
+ {urls:'stun:stun2.l.google.com:19302'}
 ];
 const qs=s=>document.querySelector(s);
 function code(){let c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',x='';for(let i=0;i<8;i++)x+=c[Math.floor(Math.random()*c.length)];return x}
@@ -56,7 +56,7 @@ function boardScroll(){qs('#whiteboardSection').scrollIntoView({behavior:'smooth
 function topPage(){scrollTo({top:0,behavior:'smooth'})}
 function closeModal(id){qs('#'+id)?.classList.remove('show')}
 function openSettings(){qs('#nameInput').value=localStorage.getItem('otagh_name')||myName;qs('#settingsModal').classList.add('show')}
-function saveSettings(){let n=qs('#nameInput').value.trim();if(!n)return alert('نام را وارد کن.');localStorage.setItem('otagh_name',n);qs('#profileName').textContent=n;qs('#profileAvatar').textContent=n[0];closeModal('settingsModal');if(joined){let m=members.get(myId);if(m){m.name=n;channel?.track(m);renderLocal();renderMembers()}}alert('تنظیمات ذخیره شد.')}
+function saveSettings(){let n=qs('#nameInput').value.trim();if(!n)return alert('نام را وارد کن.');localStorage.setItem('otagh_name',n);qs('#profileName').textContent=n;qs('#profileAvatar').textContent=n[0];closeModal('settingsModal');if(joined){let m=members.get(myId);if(m){m.name=n;send({type:'member',member:m});renderLocal();renderMembers()}}alert('تنظیمات ذخیره شد.')}
 function openTasks(){renderTasks();qs('#tasksModal').classList.add('show');qs('#taskInput').focus()}
 function getTasks(){try{return JSON.parse(localStorage.getItem('otagh_tasks')||'[]')}catch{return[]}}
 function saveTasks(a){localStorage.setItem('otagh_tasks',JSON.stringify(a))}
@@ -67,199 +67,120 @@ function removeTask(i){let a=getTasks();a.splice(i,1);saveTasks(a);renderTasks()
 function openNotifications(){qs('#notificationsModal').classList.add('show')}
 
 async function media(){
-  if(localStream){await attachLocalTracksToPeers(true);renderLocal();return true}
-  if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia){setStatus('این صفحه باید با HTTPS باز شود.');return false}
-  try{
-    localStream=await navigator.mediaDevices.getUserMedia({
-      audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},
-      video:{width:{ideal:640,max:1280},height:{ideal:360,max:720},facingMode:'user'}
-    });
-    micOn=true;camOn=true;
-    renderLocal();
-    qs('#mic').classList.add('active');qs('#cam').classList.add('active');
-    await attachLocalTracksToPeers(true);
-    await signal({type:'ready'});
-    return true;
-  }catch(e){
-    console.warn('Media permission:',e);
-    setStatus('جلسه باز است؛ اجازه دوربین و میکروفون داده نشد.');
-    return false;
-  }
+ if(localStream){await attachLocalTracks();renderLocal();return true}
+ if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia){setStatus('این صفحه باید با HTTPS باز شود.');return false}
+ try{
+  localStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:{width:{ideal:640,max:1280},height:{ideal:360,max:720},facingMode:'user'}});
+  micOn=true;camOn=true;renderLocal();qs('#mic').classList.add('active');qs('#cam').classList.add('active');
+  await attachLocalTracks();
+  await send({type:'member',member:me()});
+  await send({type:'hello'});
+  return true;
+ }catch(e){console.error('getUserMedia',e);setStatus('جلسه باز است؛ اجازه دوربین و میکروفون داده نشد.');return false}
 }
+function me(){return {id:myId,name:myName,role:isOwner()?'owner':'member',muted:!micOn}}
 
-async function attachLocalTracksToPeers(makeOffer=false){
-  if(!localStream)return;
-  for(const p of peers.values()){
-    for(const tr of localStream.getTracks()){
-      const sender=p.pc.getSenders().find(x=>x.track?.kind===tr.kind);
-      try{
-        if(sender){if(sender.track!==tr)await sender.replaceTrack(tr)}
-        else p.pc.addTrack(tr,localStream);
-      }catch(e){console.warn('media track',e)}
-    }
+async function attachLocalTracks(){
+ if(!localStream)return;
+ for(const [id,p] of peers){
+  for(const tr of localStream.getTracks()){
+   let sender=p.pc.getSenders().find(s=>s.track?.kind===tr.kind);
+   try{if(sender){if(sender.track!==tr)await sender.replaceTrack(tr)}else p.pc.addTrack(tr,localStream)}catch(e){console.warn('add/replace track',id,e)}
   }
+ }
 }
 
 function renderLocal(){
-  let t=qs('#tile-'+myId);
-  if(!t){
-    t=document.createElement('div');t.className='video-tile main';t.id='tile-'+myId;
-    t.innerHTML='<span class="tile-badge">شما</span><video autoplay playsinline muted class="mirror"></video><span class="video-label"></span>';
-    qs('#stage').appendChild(t);
-  }
-  const v=t.querySelector('video');
-  v.srcObject=screenStream||localStream;
-  v.muted=true;v.autoplay=true;v.playsInline=true;
-  if(v.srcObject)v.play().catch(()=>{});
-  t.querySelector('.video-label').textContent=myName+(isOwner()?' • مدیر':' • شما');
+ let t=qs('#tile-'+myId);
+ if(!t){t=document.createElement('div');t.className='video-tile main';t.id='tile-'+myId;t.innerHTML='<span class="tile-badge">شما</span><video autoplay playsinline muted class="mirror"></video><span class="video-label"></span>';qs('#stage').appendChild(t)}
+ const v=t.querySelector('video');v.srcObject=screenStream||localStream;v.muted=true;v.autoplay=true;v.playsInline=true;if(v.srcObject)v.play().catch(()=>{});t.querySelector('.video-label').textContent=myName+(isOwner()?' • مدیر':' • شما')
 }
 
-function peer(id,name,role){
-  if(peers.has(id))return peers.get(id);
-  const polite=myId>id;
-  const pc=new RTCPeerConnection({iceServers,iceCandidatePoolSize:10});
-  const p={pc,name,role,polite,pending:[],remoteStream:new MediaStream(),makingOffer:false,ignoreOffer:false};
-  peers.set(id,p);
-  if(localStream)localStream.getTracks().forEach(t=>{try{pc.addTrack(t,localStream)}catch(e){}});
-  pc.onicecandidate=e=>{if(e.candidate)signal({type:'ice',to:id,data:e.candidate.toJSON()})};
-  pc.ontrack=e=>{
-    if(!p.remoteStream.getTracks().some(x=>x.id===e.track.id))p.remoteStream.addTrack(e.track);
-    renderRemote(id,name,role,p.remoteStream);
-    e.track.onunmute=()=>renderRemote(id,name,role,p.remoteStream);
-  };
-  pc.onnegotiationneeded=async()=>{
-    if(!joined||pc.signalingState!=='stable'||p.makingOffer)return;
-    try{p.makingOffer=true;await pc.setLocalDescription();await signal({type:'description',to:id,data:pc.localDescription})}
-    catch(e){console.warn('negotiation',e)}finally{p.makingOffer=false}
-  };
-  pc.onconnectionstatechange=()=>{
-    if(pc.connectionState==='connected'){setStatus('✓ صدا و تصویر متصل شد.');renderMembers()}
-    else if(pc.connectionState==='failed'){
-      setStatus('اتصال رسانه قطع شد؛ تلاش مجدد...');
-      setTimeout(async()=>{
-        if(!joined||!peers.has(id)||pc.signalingState!=='stable')return;
-        try{p.makingOffer=true;await pc.setLocalDescription(await pc.createOffer({iceRestart:true}));await signal({type:'description',to:id,data:pc.localDescription})}catch(e){}finally{p.makingOffer=false}
-      },1000)
-    }else if(pc.connectionState==='closed')removePeer(id);
-  };
-  pc.oniceconnectionstatechange=()=>{if(pc.iceConnectionState==='failed'){try{pc.restartIce()}catch(e){}}};
-  return p;
+function ensurePeer(id,name,role){
+ if(id===myId)return null;
+ if(peers.has(id))return peers.get(id);
+ const polite=myId>id;
+ const pc=new RTCPeerConnection({iceServers,iceCandidatePoolSize:10});
+ const p={pc,name,role,polite,ignoreOffer:false,makingOffer:false,pendingIce:[],remoteStream:new MediaStream()};
+ peers.set(id,p);
+ if(localStream)localStream.getTracks().forEach(t=>{try{pc.addTrack(t,localStream)}catch(e){}});
+ pc.onicecandidate=e=>{if(e.candidate)send({type:'ice',to:id,data:e.candidate.toJSON()})};
+ pc.ontrack=e=>{if(!p.remoteStream.getTracks().some(x=>x.id===e.track.id))p.remoteStream.addTrack(e.track);renderRemote(id,p.name,p.role,p.remoteStream);e.track.onunmute=()=>renderRemote(id,p.name,p.role,p.remoteStream)};
+ pc.onnegotiationneeded=async()=>{
+  if(!joined||p.makingOffer)return;
+  try{p.makingOffer=true;await pc.setLocalDescription();await send({type:'description',to:id,data:pc.localDescription})}catch(e){console.warn('negotiationneeded',e)}finally{p.makingOffer=false}
+ };
+ pc.onconnectionstatechange=()=>{
+  if(pc.connectionState==='connected'){setStatus('✓ صدا و تصویر متصل شد.');renderMembers()}
+  if(pc.connectionState==='failed'){setStatus('اتصال رسانه مشکل دارد؛ در حال تلاش مجدد...');setTimeout(()=>restartPeer(id),1200)}
+  if(pc.connectionState==='closed'||pc.connectionState==='disconnected'){setTimeout(()=>{if(peers.get(id)?.pc===pc&&pc.connectionState==='disconnected')restartPeer(id)},2000)}
+ };
+ pc.oniceconnectionstatechange=()=>{if(pc.iceConnectionState==='failed'){try{pc.restartIce()}catch(e){}restartPeer(id)}};
+ return p;
 }
-
+async function restartPeer(id){if(!joined)return;let old=peers.get(id);if(!old)return;try{old.pc.close()}catch(e){}peers.delete(id);let m=members.get(id);let p=ensurePeer(id,m?.name||'عضو',m?.role||'member');if(p&&myId<id){try{await p.pc.setLocalDescription(await p.pc.createOffer({iceRestart:true}));await send({type:'description',to:id,data:p.pc.localDescription})}catch(e){}}
+}
 function renderRemote(id,name,role,stream){
-  let t=qs('#tile-'+id);
-  if(!t){
-    t=document.createElement('div');t.className='video-tile';t.id='tile-'+id;
-    t.innerHTML='<span class="tile-badge"></span><video autoplay playsinline></video><span class="video-label"></span>';
-    qs('#stage').appendChild(t);
-  }
-  t.querySelector('.tile-badge').textContent=role==='owner'?'مدیر':'عضو';
-  t.querySelector('.video-label').textContent=name;
-  const v=t.querySelector('video');
-  if(v.srcObject!==stream)v.srcObject=stream;
-  v.muted=false;v.autoplay=true;v.playsInline=true;
-  v.play().catch(()=>{t.onclick=()=>v.play().catch(()=>{})});
+ let t=qs('#tile-'+id);if(!t){t=document.createElement('div');t.className='video-tile';t.id='tile-'+id;t.innerHTML='<span class="tile-badge"></span><video autoplay playsinline></video><span class="video-label"></span>';qs('#stage').appendChild(t)}
+ t.querySelector('.tile-badge').textContent=role==='owner'?'مدیر':'عضو';t.querySelector('.video-label').textContent=name;let v=t.querySelector('video');if(v.srcObject!==stream)v.srcObject=stream;v.muted=false;v.autoplay=true;v.playsInline=true;v.play().catch(()=>{t.onclick=()=>v.play().catch(()=>{})})
 }
-function removePeer(id){let p=peers.get(id);if(p)try{p.pc.ontrack=null;p.pc.close()}catch(e){}peers.delete(id);qs('#tile-'+id)?.remove()}
+function removePeer(id){let p=peers.get(id);if(p)try{p.pc.close()}catch(e){}peers.delete(id);qs('#tile-'+id)?.remove()}
 
 async function startRoom(){
-  if(joined){openMeeting();return}
-  try{
-    if(!roomId){alert('اول یک جلسه ایجاد کن یا با کد وارد شو.');return}
-    setStatus('در حال اتصال به اتاق...');
-    channel=sb.channel('otagh-saghf-'+roomId,{config:{presence:{key:myId},broadcast:{self:false}}});
-    channel.on('broadcast',{event:'signal'},async({payload})=>{if(payload?.from!==myId)await handle(payload)});
-    channel.on('presence',{event:'sync',sync});
-    channel.on('presence',{event:'join',joinPresence});
-    channel.on('presence',{event:'leave',leavePresence});
-    await new Promise((res,rej)=>{
-      let timer=setTimeout(()=>rej(Error('اتصال به اتاق در Supabase برقرار نشد.')),12000);
-      channel.subscribe(s=>{
-        if(s==='SUBSCRIBED'){clearTimeout(timer);res()}
-        if(s==='CHANNEL_ERROR'||s==='TIMED_OUT'){clearTimeout(timer);rej(Error('اتصال Supabase Realtime خطا داد.'))}
-      })
-    });
-    const me={id:myId,name:myName,role:isOwner()?'owner':'member',muted:false};
-    members.set(myId,me);await channel.track(me);joined=true;
-    qs('#profileName').textContent=myName;qs('#profileStatus').textContent='در جلسه';qs('#profileAvatar').textContent=myName[0];qs('#roomCode').textContent=roomId;qs('#adminBanner').classList.toggle('show',isOwner());openMeeting();
-    setStatus('جلسه فعال است؛ دوربین و میکروفون را فعال می‌کنیم...');
-    await media();
-    await sync();
-    await signal({type:'ready'});
-  }catch(e){console.error(e);alert('اتصال به جلسه برقرار نشد.\n\n'+e.message);await leaveRoom(false)}
+ if(joined){openMeeting();return}
+ if(!roomId){alert('اول یک جلسه ایجاد کن یا با کد وارد شو.');return}
+ try{
+  setStatus('در حال اتصال به اتاق...');
+  channel=sb.channel('otagh-saghf-'+roomId,{config:{presence:{key:myId},broadcast:{self:false}}});
+  channel.on('broadcast',{event:'signal'},async({payload})=>{if(payload?.from!==myId)await handle(payload)});
+  channel.on('presence',{event:'sync',syncPresence});
+  channel.on('presence',{event:'join',joinPresence});
+  channel.on('presence',{event:'leave',leavePresence});
+  await new Promise((res,rej)=>{let timer=setTimeout(()=>rej(Error('Supabase Realtime پاسخ نداد.')),10000);channel.subscribe(s=>{if(s==='SUBSCRIBED'){clearTimeout(timer);res()}if(s==='CHANNEL_ERROR'||s==='TIMED_OUT'){clearTimeout(timer);rej(Error('Supabase Realtime خطا داد: '+s))}})});
+  joined=true;members.set(myId,me());await channel.track(me());
+  qs('#profileName').textContent=myName;qs('#profileStatus').textContent='در جلسه';qs('#profileAvatar').textContent=myName[0];qs('#roomCode').textContent=roomId;qs('#adminBanner').classList.toggle('show',isOwner());openMeeting();
+  setStatus('جلسه وصل شد؛ در حال پیدا کردن اعضا...');
+  await media();
+  await send({type:'hello'});
+  setTimeout(()=>send({type:'hello'}),1000);setTimeout(()=>send({type:'hello'}),3000);
+  await syncPresence();
+ }catch(e){console.error(e);alert('اتصال به جلسه برقرار نشد.\n\n'+e.message);await leaveRoom(false)}
 }
-function state(){let s=channel?.presenceState()||{},a=[];Object.values(s).forEach(v=>{if(v[0])a.push(v[0])});return a}
-async function sync(){
-  const all=state();
-  for(const m of all){
-    if(m.id===myId)continue;
-    if(all.length>MAX)continue;
-    members.set(m.id,m);
-    peer(m.id,m.name,m.role);
-  }
-  renderMembers();
-  setStatus(all.length>1?'اعضا حاضرند؛ در حال برقراری صدا و تصویر...':'منتظر ورود اعضای دیگر...');
-}
-async function joinPresence(e){
-  let m=e.newPresences?.[0];
-  if(!m||m.id===myId)return;
-  members.set(m.id,m);peer(m.id,m.name,m.role);renderMembers();
-  if(localStream){await signal({type:'ready',to:m.id});await attachLocalTracksToPeers(false)}
-}
-function leavePresence(e){(e.leftPresences||[]).forEach(m=>{members.delete(m.id);removePeer(m.id)});renderMembers()}
-async function maybeOffer(id,force=false){
-  const p=peers.get(id);if(!p||myId>id||p.makingOffer)return;
-  const pc=p.pc;
-  if(!force && pc.signalingState!=='stable')return;
-  try{
-    p.makingOffer=true;
-    if(force && pc.signalingState!=='stable'){try{await pc.setLocalDescription({type:'rollback'})}catch(e){}}
-    const o=await pc.createOffer({offerToReceiveAudio:true,offerToReceiveVideo:true});
-    await pc.setLocalDescription(o);
-    await signal({type:'offer',to:id,data:pc.localDescription});
-  }catch(e){console.warn('offer',e)}finally{p.makingOffer=false}
-}
-async function signal(x){if(channel)await channel.send({type:'broadcast',event:'signal',payload:{...x,from:myId,ts:Date.now()}})}
+function presenceMembers(){let s=channel?.presenceState()||{},a=[];Object.values(s).forEach(v=>{if(Array.isArray(v))v.forEach(x=>a.push(x))});return a}
+async function syncPresence(){for(const m of presenceMembers()){if(m.id!==myId)addMember(m)};renderMembers();setStatus(members.size>1?'✓ اعضا پیدا شدند؛ برقراری صدا و تصویر...':'منتظر ورود اعضای دیگر...');await send({type:'hello'})}
+function addMember(m){if(!m?.id||m.id===myId)return;if(members.size>=MAX&&!members.has(m.id))return;members.set(m.id,m);ensurePeer(m.id,m.name,m.role);renderMembers()}
+async function joinPresence(e){for(const m of (e.newPresences||[])){addMember(m)};renderMembers();await send({type:'hello'})}
+function leavePresence(e){for(const m of (e.leftPresences||[])){members.delete(m.id);removePeer(m.id)}renderMembers()}
+
+async function send(payload){if(!channel||!joined)return;try{await channel.send({type:'broadcast',event:'signal',payload:{...payload,from:myId,ts:Date.now()}})}catch(e){console.warn('broadcast failed',e)}}
 async function handle(s){
-  if(s.to&&s.to!==myId)return;
-  const m=members.get(s.from)||{id:s.from,name:'عضو',role:'member'};
-  members.set(s.from,m);
-  const p=peer(s.from,m.name,m.role),pc=p.pc;
-  try{
-    if(s.type==='ready'){
-      if(localStream)await attachLocalTracksToPeers(false);
-      return;
-    }
-    if(s.type==='description'){
-      const desc=s.data;
-      const collision=desc.type==='offer'&&(p.makingOffer||pc.signalingState!=='stable');
-      p.ignoreOffer=!p.polite&&collision;
-      if(p.ignoreOffer)return;
-      if(collision){try{await pc.setLocalDescription({type:'rollback'})}catch(e){}}
-      await pc.setRemoteDescription(desc);
-      for(const c of p.pending){try{await pc.addIceCandidate(c)}catch(e){}}
-      p.pending=[];
-      if(desc.type==='offer'){
-        if(localStream)await attachLocalTracksToPeers(false);
-        await pc.setLocalDescription();
-        await signal({type:'description',to:s.from,data:pc.localDescription});
-      }
-      return;
-    }
-    if(s.type==='ice'){
-      const c=new RTCIceCandidate(s.data);
-      if(pc.remoteDescription)await pc.addIceCandidate(c).catch(()=>{});else p.pending.push(c);
-      return;
-    }
-    if(s.type==='cmd')command(s.data);
-  }catch(e){if(!p.ignoreOffer)console.error('signaling',e)}
+ if(!s||s.from===myId||(s.to&&s.to!==myId))return;
+ if(s.type==='hello'){addMember({id:s.from,name:s.name||'عضو',role:s.role||'member'});await send({type:'welcome',to:s.from,member:me()});let p=ensurePeer(s.from,s.name||'عضو',s.role||'member');if(p&&localStream)await attachLocalTracks();return}
+ if(s.type==='welcome'){if(s.member)addMember(s.member);return}
+ if(s.type==='member'){if(s.member)addMember(s.member);return}
+ const m=members.get(s.from)||{id:s.from,name:'عضو',role:'member'};addMember(m);const p=ensurePeer(s.from,m.name,m.role),pc=p.pc;
+ try{
+  if(s.type==='description'){
+   const desc=s.data;const collision=desc.type==='offer'&&(p.makingOffer||pc.signalingState!=='stable');p.ignoreOffer=!p.polite&&collision;if(p.ignoreOffer)return;
+   if(collision){try{await pc.setLocalDescription({type:'rollback'})}catch(e){}}
+   await pc.setRemoteDescription(desc);
+   while(p.pendingIce.length){try{await pc.addIceCandidate(p.pendingIce.shift())}catch(e){}}
+   if(desc.type==='offer'){await pc.setLocalDescription();await send({type:'description',to:s.from,data:pc.localDescription})}
+   return;
+  }
+  if(s.type==='ice'){
+   const c=new RTCIceCandidate(s.data);if(pc.remoteDescription)await pc.addIceCandidate(c).catch(()=>{});else p.pendingIce.push(c);return;
+  }
+  if(s.type==='cmd')command(s.data);
+ }catch(e){if(!p.ignoreOffer)console.error('signaling',e)}
 }
-async function leaveRoom(show=true){joined=false;if(channel){try{await channel.untrack()}catch(e){}try{await sb.removeChannel(channel)}catch(e){}channel=null}peers.forEach(p=>{try{p.pc.close()}catch(e){}});peers.clear();if(screenStream)screenStream.getTracks().forEach(t=>t.stop());if(localStream)localStream.getTracks().forEach(t=>t.stop());screenStream=null;localStream=null;members.clear();qs('#stage').querySelectorAll('.video-tile').forEach(x=>x.remove());qs('#profileStatus').textContent='آفلاین';qs('#count').textContent='۰ نفر حاضر';if(show)alert('از جلسه خارج شدی.')}
-async function toggleMic(){if(!joined){await startRoom();return}if(!localStream){let ok=await media();if(!ok)return}micOn=!micOn;localStream.getAudioTracks().forEach(t=>t.enabled=micOn);qs('#mic').classList.toggle('active',micOn);if(members.get(myId))await channel?.track({...members.get(myId),muted:!micOn})}
+
+async function leaveRoom(show=true){joined=false;if(channel){try{await channel.untrack()}catch(e){}try{await sb.removeChannel(channel)}catch(e){}channel=null}for(const p of peers.values()){try{p.pc.close()}catch(e){}}peers.clear();if(screenStream)screenStream.getTracks().forEach(t=>t.stop());if(localStream)localStream.getTracks().forEach(t=>t.stop());screenStream=null;localStream=null;members.clear();qs('#stage').querySelectorAll('.video-tile').forEach(x=>x.remove());qs('#profileStatus').textContent='آفلاین';qs('#count').textContent='۰ نفر حاضر';if(show)alert('از جلسه خارج شدی.')}
+async function toggleMic(){if(!joined){await startRoom();return}if(!localStream){let ok=await media();if(!ok)return}micOn=!micOn;localStream.getAudioTracks().forEach(t=>t.enabled=micOn);qs('#mic').classList.toggle('active',micOn);let m=members.get(myId);if(m){m.muted=!micOn;members.set(myId,m);await channel?.track(m);await send({type:'member',member:m})}}
 async function toggleCam(){if(!joined){await startRoom();return}if(!localStream){let ok=await media();if(!ok)return}camOn=!camOn;localStream.getVideoTracks().forEach(t=>t.enabled=camOn);qs('#cam').classList.toggle('active',camOn);renderLocal()}
-async function screenShare(){if(!joined)return startRoom();if(sharing)return stopShare();try{screenStream=await navigator.mediaDevices.getDisplayMedia({video:true});let tr=screenStream.getVideoTracks()[0];for(let p of peers.values()){let s=p.pc.getSenders().find(x=>x.track?.kind==='video');if(s)await s.replaceTrack(tr)}let v=qs('#tile-'+myId+' video');if(v){v.srcObject=screenStream;v.play().catch(()=>{})}sharing=true;qs('#screen').classList.add('active');tr.onended=stopShare}catch(e){console.warn(e)}}
+async function screenShare(){if(!joined){await startRoom();return}if(sharing)return stopShare();try{screenStream=await navigator.mediaDevices.getDisplayMedia({video:true});let tr=screenStream.getVideoTracks()[0];for(let p of peers.values()){let s=p.pc.getSenders().find(x=>x.track?.kind==='video');if(s)await s.replaceTrack(tr)}let v=qs('#tile-'+myId+' video');if(v){v.srcObject=screenStream;v.play().catch(()=>{})}sharing=true;qs('#screen').classList.add('active');tr.onended=stopShare}catch(e){console.warn(e)}}
 async function stopShare(){let tr=localStream?.getVideoTracks()[0];for(let p of peers.values()){let s=p.pc.getSenders().find(x=>x.track?.kind==='video');if(s&&tr)await s.replaceTrack(tr)}screenStream?.getTracks().forEach(t=>t.stop());screenStream=null;sharing=false;qs('#screen').classList.remove('active');renderLocal()}
-async function cmd(data){if(channel)await signal({type:'cmd',data})}
+async function cmd(data){if(isOwner())await send({type:'cmd',data})}
 async function muteUser(id){if(!isAdmin()||id===myId)return;await cmd({action:'mute',id})}
 async function kickUser(id){if(!isAdmin()||id===myId)return;await cmd({action:'kick',id})}
 function setAdmin(){alert('فقط سازنده اتاق مدیر است.')}
@@ -268,10 +189,7 @@ function command(d){if(d.action==='mute'&&d.id===myId){micOn=false;localStream?.
 function renderMembers(){let box=qs('#members'),arr=[...members.values()];qs('#count').textContent=(arr.length+' نفر حاضر').replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]);box.innerHTML='';if(!arr.length){box.innerHTML='<div style="font-size:11px;color:#888">هنوز کسی وارد جلسه نشده است.</div>';return}arr.forEach(m=>{let d=document.createElement('div');d.className='member';let role=m.role==='owner'?'مدیر':'عضو';let actions='';if(isOwner()&&m.id!==myId)actions='<button class="mini" onclick="muteUser(\''+m.id+'\')">سکوت</button><button class="mini danger" onclick="kickUser(\''+m.id+'\')">اخراج</button>';d.innerHTML='<div class="avatar">'+(m.name||'م')[0]+'</div><span>'+esc(m.name)+(m.id===myId?' (شما)':'')+'</span><span class="role">'+role+'</span><span class="status"></span><span class="member-actions">'+actions+'</span>';box.appendChild(d)})}
 function setStatus(t){qs('#status').textContent=t}function esc(x){return String(x).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}function copyLink(){if(!roomId)return alert('اول جلسه ایجاد کن.');let l=location.origin+location.pathname+'?room='+roomId+'&host='+hostId;navigator.clipboard?.writeText(l).then(()=>alert('لینک جلسه کپی شد.')).catch(()=>prompt('لینک:',l))}
 let boardMode='pen',drawing=false;const canvas=qs('#board'),wrap=qs('#boardWrap'),ctx=canvas.getContext('2d');function resize(){canvas.width=wrap.clientWidth;canvas.height=wrap.clientHeight;ctx.lineCap='round';ctx.lineJoin='round'}window.addEventListener('resize',resize);setTimeout(resize,100);function pos(e){let r=canvas.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}canvas.addEventListener('pointerdown',e=>{drawing=true;canvas.setPointerCapture(e.pointerId);let p=pos(e);ctx.beginPath();ctx.moveTo(p.x,p.y)});canvas.addEventListener('pointermove',e=>{if(!drawing)return;let p=pos(e);ctx.lineWidth=boardMode==='erase'?22:3;ctx.strokeStyle=boardMode==='erase'?'#fff':'#7047d8';ctx.lineTo(p.x,p.y);ctx.stroke()});canvas.addEventListener('pointerup',()=>drawing=false);canvas.addEventListener('pointercancel',()=>drawing=false);function clearBoard(){ctx.clearRect(0,0,canvas.width,canvas.height)}let selectedPdf=null;function showFile(i){let f=i.files[0],o=qs('#fileName'),a=qs('#pdfActions');if(f&&f.type==='application/pdf'){selectedPdf=f;o.textContent='✓ '+f.name;a.style.display='flex'}else{selectedPdf=null;o.textContent=f?'لطفاً فقط PDF انتخاب کنید.':'';a.style.display='none'}}function previewPdf(){if(!selectedPdf)return alert('اول یک PDF انتخاب کن.');let url=URL.createObjectURL(selectedPdf);qs('#pdfFrame').src=url;qs('#pdfModal').classList.add('show')}function downloadPdf(){if(!selectedPdf)return alert('اول یک PDF انتخاب کن.');let a=document.createElement('a');a.href=URL.createObjectURL(selectedPdf);a.download=selectedPdf.name;a.click()}
-(function(){let p=new URLSearchParams(location.search);let r=p.get('room'),h=p.get('host');if(r){roomId=r.toUpperCase();hostId=h;qs('#roomCode').textContent=roomId;setStatus('لینک جلسه آماده است؛ برای ورود کلیک کن.')}})();
-document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')}));
-function unlockRemoteAudio(){document.querySelectorAll('#stage video').forEach(v=>{if(!v.muted)v.play().catch(()=>{})})}
-document.addEventListener('click',unlockRemoteAudio,{passive:true});
+(function(){let p=new URLSearchParams(location.search),r=p.get('room'),h=p.get('host');if(r){roomId=r.toUpperCase();hostId=h;qs('#roomCode').textContent=roomId;setStatus('لینک جلسه آماده است؛ برای ورود کلیک کن.')}})();
 </script>
 </body>
 </html>
